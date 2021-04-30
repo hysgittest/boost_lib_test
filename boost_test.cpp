@@ -4,9 +4,10 @@
 
 #include <boost/scoped_ptr.hpp>
 #include <memory>
-#include <boost/smart_ptr.hpp>
+#include <boost/shared_ptr.hpp>
 #include <iostream>
 #include <string>
+#include <cstring>
 
 using namespace std;
 
@@ -25,7 +26,7 @@ public:
 		this->str = _str;
 	}
 
-	~ptr_test() { cout << "소멸자 생성" << endl; }
+	~ptr_test() { cout << "make destructor" << endl; }
 
 	void print__ptr_info();
 };
@@ -40,7 +41,7 @@ int main(int argc, char **argv) {
 
 		exit(0);
 	}
-
+	
 	if ((strcmp("scoped_ptr", argv[1])) == 0) {
 		boost::scoped_ptr<ptr_test> scp(new ptr_test(argv[1]));
 
@@ -72,6 +73,7 @@ int main(int argc, char **argv) {
 
 #include <iostream>
 #include <boost/chrono.hpp>
+#include <ratio>
 
 int main() {
 	boost::chrono::system_clock::time_point start_time = boost::chrono::system_clock::now();
@@ -106,7 +108,6 @@ int main() {
 	boost::chrono::duration<int, boost::ratio<3600>> hour = boost::chrono::duration_cast<boost::chrono::hours>(end_time - start_time);
 	std::cout << "hour end time : " << hour.count() << std::endl;
 }
-
 
 
 #endif*/
@@ -184,8 +185,8 @@ int main() {
 	boost::function<int(int)> f2 = boost::bind(add, _1, 10);
 	boost::function<int(int, int)> f3 = boost::bind(add, 3, 4);
 	std::cout << f(1, 2) << std::endl;	// 3
-	std::cout << f2(2) << std::endl;	// 12 (2번째 인자 10으로 고정)
-	std::cout << f3(1, 2) << std::endl;	// 7 (1, 2번째 인자 각각 3, 4로 고정했기 때문에 함수포인터로 매개변수 1, 2를 넘겨줘도 무효처리)
+	std::cout << f2(2) << std::endl;	// 12 
+	std::cout << f3(1, 2) << std::endl;	// 7 
 
 	return 0;
 }
@@ -194,7 +195,7 @@ int main() {
 #endif*/
 
 // thread
-/*#ifndef __THREAD_TEST__
+#ifndef __THREAD_TEST__
 #define __THREAD_TEST__
 
 #include <iostream>
@@ -240,47 +241,25 @@ int main()
 	boost::thread th2 = boost::thread(boost::bind(&thread_test::thread_memfunc_2, &io, "second"));
 	boost::thread th3 = boost::thread(boost::bind(&thread_test::thread_memfunc_3, &io, "third", NULL));
 
-	th1.detach();
-	th2.detach();
-	th3.detach();
+	th1.join();
+	th2.join();
+	th3.join();
 
-	return 0;
-}
-
-
-#endif*/
-
-// mutex && condition variable
-#ifndef __MUTEX__TEST__
-#define __MUTEX__TEST__
-
-
-#include <iostream>
-#include <thread>
-using namespace std;
-
-//스레드에 의해 호출되는 함수
-void call_from_thread(int tid) {
-	cout << "스레드 실행 " << tid << std::endl;
-}
-
-int main() {
-	thread t[10];
-
-	//10개의 스레드 시작
-	for (int i = 0; i < 10; ++i) {
-		t[i] = thread(call_from_thread, i);
-	}
-
-	std::cout << "메인 함수 시작" << endl;
-
-	//스레드가 종료될 때 까지 대시
-	for (int i = 0; i < 10; ++i) {
-		t[i].join();
-	}
+	//th1.detach();
+	//th2.detach();
+	//th3.detach();
 
 	return 0;
 }
 
 
 #endif
+
+// mutex && condition variable
+/*#ifndef __MUTEX__TEST__
+#define __MUTEX__TEST__
+
+
+
+
+#endif*/
