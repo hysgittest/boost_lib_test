@@ -303,94 +303,214 @@ int main()
 #endif*/
 
 // condition variable
-#ifndef __CONDITION_TEST__
+/*#ifndef __CONDITION_TEST__
 #define __CONDITION_TEST__
 
 
-#include <boost/chrono.hpp>
 #include <iostream>
 #include <boost/thread.hpp>
-#include <queue>
-#include <string>
-#include <vector>
 
-using namespace std;
+boost::mutex m;
+boost::condition_variable cond_var;
 
-void producer(queue<string>* downloaded_pages, boost::mutex* m,
-	int index, boost::condition_variable* cv) {
-	for (int i = 0; i < 5; i++) {
-		// 웹사이트를 다운로드 하는데 걸리는 시간이라 생각하면 된다.
-		// 각 쓰레드 별로 다운로드 하는데 걸리는 시간이 다르다.
-		boost::this_thread::sleep_for(boost::chrono::milliseconds(100 * index));
-		string content = "웹사이트 : " + to_string(i) + " from thread(" +
-			std::to_string(index) + ")\n";
+bool ready_status;
 
-		// data 는 쓰레드 사이에서 공유되므로 critical section 에 넣어야 한다.
-		m->lock();
-		downloaded_pages->push(content);
-		m->unlock();
-
-		// consumer 에게 content 가 준비되었음을 알린다.
-		cv->notify_one();
-	}
+void shared_data_func() {
+	std::cout << "Processing shared data." << std::endl;
 }
 
-void consumer(queue<string>* downloaded_pages, boost::mutex* m,
-	int* num_processed, boost::condition_variable* cv) {
-	while (*num_processed < 25) {
-		boost::unique_lock<boost::mutex> lk(*m);
+void consumer_func() {
+	std::cout << "Worker: Waiting for work." << std::endl;
 
-		cv->wait(
-			lk, [&] { return !downloaded_pages->empty() || *num_processed == 25; });
+	boost::unique_lock<boost::mutex> lck(m);
+	cond_var.wait(lck, [] {return ready_status;});
+	shared_data_func();
+	std::cout << "Work done." << std::endl;
+}
 
-		if (*num_processed == 25) {
-			lk.unlock();
-			return;
-		}
-
-		// 맨 앞의 페이지를 읽고 대기 목록에서 제거한다.
-		string content = downloaded_pages->front();
-		downloaded_pages->pop();
-
-		(*num_processed)++;
-		lk.unlock();
-
-		// content 를 처리한다.
-		cout << content;
-		boost::this_thread::sleep_for(boost::chrono::milliseconds(80));
-	}
+void producer_func() {
+	boost::lock_guard<boost::mutex> lck(m);
+	ready_status = true;
+	std::cout << "Sender: Data is ready." << std::endl;
+	cond_var.notify_one();
 }
 
 int main() {
-	// 현재 다운로드한 페이지들 리스트로, 아직 처리되지 않은 것들이다.
-	queue<std::string> downloaded_pages;
-	boost::mutex m;
-	boost::condition_variable cv;
+	std::cout << std::endl;
 
-	vector<boost::thread> producers;
-	for (int i = 0; i < 5; i++) {
-		producers.push_back(
-			boost::thread(producer, &downloaded_pages, &m, i + 1, &cv));
+	boost::thread t1(consumer_func);
+	boost::thread t2(producer_func);
+
+	t1.join();
+	t2.join();
+
+	std::cout << std::endl;
+}
+
+#endif*/
+
+// deadline timer
+/*#ifndef __DEADTIME_TEST__
+#define __DEADTIME_TEST__
+
+#include <iostream>
+#include <boost/asio.hpp>
+#include <boost/thread.hpp>
+#include <boost/bind.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
+
+class printer
+{
+public:
+	printer(boost::asio::io_context& io)
+		: strand_(io),
+		timer1_(io, boost::posix_time::seconds(1)),
+		timer2_(io, boost::posix_time::seconds(1)),
+		timer3_(io, boost::posix_time::seconds(1)),
+		count_(0)
+	{
+		timer1_.async_wait(boost::asio::bind_executor(strand_, boost::bind(&printer::print1, this)));
+		timer2_.async_wait(boost::asio::bind_executor(strand_, boost::bind(&printer::print2, this)));
+		timer3_.async_wait(boost::asio::bind_executor(strand_, boost::bind(&printer::print3, this)));
 	}
 
-	int num_processed = 0;
-	vector<boost::thread> consumers;
-	for (int i = 0; i < 3; i++) {
-		consumers.push_back(
-			boost::thread(consumer, &downloaded_pages, &m, &num_processed, &cv));
+	~printer()
+	{
+		std::cout << "Final count is " << count_ << std::endl;
 	}
 
-	for (int i = 0; i < 5; i++) {
-		producers[i].join();
+	void print1()
+	{
+		if (count_ < 10)
+		{
+			std::cout << "Timer 1: " << count_ << std::endl;
+			++count_;
+
+			timer1_.expires_at(timer1_.expires_at() + boost::posix_time::seconds(1));
+
+			timer1_.async_wait(boost::asio::bind_executor(strand_, boost::bind(&printer::print1, this)));
+		}
 	}
 
-	// 나머지 자고 있는 쓰레드들을 모두 깨운다.
-	cv.notify_all();
+	void print2()
+	{
+		if (count_ < 10)
+		{
+			std::cout << "Timer 2: " << count_ << std::endl;
+			++count_;
 
-	for (int i = 0; i < 3; i++) {
-		consumers[i].join();
+			timer2_.expires_at(timer2_.expires_at() + boost::posix_time::seconds(1));
+
+			timer2_.async_wait(boost::asio::bind_executor(strand_, boost::bind(&printer::print2, this)));
+		}
 	}
+
+	void print3()
+	{
+		if (count_ < 10)
+		{
+			std::cout << "Timer 3: " << count_ << std::endl;
+			++count_;
+
+			timer3_.expires_at(timer3_.expires_at() + boost::posix_time::seconds(1));
+
+			timer3_.async_wait(boost::asio::bind_executor(strand_, boost::bind(&printer::print3, this)));
+		}
+	}
+
+private:
+	boost::asio::io_context::strand strand_;
+
+	boost::asio::deadline_timer timer1_;
+	boost::asio::deadline_timer timer2_;
+	boost::asio::deadline_timer timer3_;
+	int count_;
+};
+
+int main()
+{
+	boost::asio::io_context io;
+	printer p(io);
+	boost::thread t(boost::bind(&boost::asio::io_context::run, &io));
+	io.run();
+	t.join();
+
+	return 0;
+}
+
+#endif*/
+
+// signal2
+/*#ifndef __SIG2_TEST__
+#define __SIG2_TEST__
+
+
+#include <boost/signal.hpp> 
+#include <iostream> 
+
+void func1()
+{
+	std::cout << "Hello";
+}
+
+void func2()
+{
+	std::cout << ", world!" << std::endl;
+}
+
+void func3()
+{
+	std::cout << "I'm hys" << std::endl;
+}
+
+int main()
+{
+	boost::signal<void()> s;
+	std::cout << "[slot connect]" << std::endl;
+	s.connect(func1);
+	s.connect(func2);
+	s.connect(func3);
+
+	std::cout << "slots num : " << s.num_slots() << std::endl; // 3
+
+
+	std::cout << "[slot disconnect]" << std::endl;
+	s.disconnect(func1);
+	s.disconnect(func2);
+	s.disconnect(func3);
+
+	if (!s.empty()) {
+		s();
+		std::cout << "slots num : " << s.num_slots() << std::endl;
+	}
+	else {
+		std::cout << "empty signal" << std::endl;
+		std::cout << "slots num : " << s.num_slots() << std::endl; // 0
+	}
+
+	std::cout << "[slot connect]" << std::endl;
+	s.connect(func1);
+	s.connect(func2);
+	s.connect(func3);
+
+	if (!s.empty()) {
+		s();  // hello, world!\n I'm hys
+		std::cout << "slots num : " << s.num_slots() << std::endl; // 3
+	}
+	else
+		std::cout << "empty signal" << std::endl;
+
+	std::cout << "[slot all_disconnect]" << std::endl;
+	s.disconnect_all_slots();
+	std::cout << "slots num : " << s.num_slots() << std::endl; // 0
+	s(); // disconnect -> not print
 }
 
 
-#endif
+#endif*/
+
+// asio
+/*#ifndef __ASIO_TEST__
+#define __ASIO_TEST__
+
+#endif*/
