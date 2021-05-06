@@ -510,7 +510,66 @@ int main()
 #endif*/
 
 // asio
-/*#ifndef __ASIO_TEST__
+#ifndef __ASIO_TEST__
 #define __ASIO_TEST__
 
-#endif*/
+
+
+#include <boost/asio.hpp>
+#include <iostream>
+#include <string>
+#include <cstring>
+
+using namespace std;
+
+int main(int argc, char **argv) {
+	unsigned short port_num = atoi(argv[1]);
+
+	cout << "[chatting program start]" << endl;
+	cout << "Waiting client......" << endl;
+
+	boost::asio::io_service io;
+	boost::asio::ip::tcp::endpoint ep(boost::asio::ip::tcp::v4(), port_num);
+	boost::asio::ip::tcp::acceptor ator(io, ep);
+
+
+	boost::asio::ip::tcp::socket sock(io);
+	ator.accept(sock);
+
+	cout << "client connect success!" << endl;
+
+	while (1)
+	{
+		array<char, 128> buf;
+		buf.assign(0);
+		boost::system::error_code error;
+		size_t len = sock.read_some(boost::asio::buffer(buf), error);
+
+		if (error) {
+			if (error == boost::asio::error::eof) {
+				cout << "connecting end" << endl;
+			}
+			else {
+				cout << "error No: " << error.value() << "\nerror Message: "
+					<< error.message() << endl;
+			}
+			exit(0);
+		}
+		else {
+			cout << "[client->server] : " << &buf[0] << endl;
+
+			char echo_msg[128] = { 0, };
+			sprintf_s(echo_msg, 128 - 1, "%s", &buf[0]);
+			int nMsgLen = strnlen_s(echo_msg, 128 - 1);
+
+			boost::system::error_code ignored_error;
+
+			sock.write_some(boost::asio::buffer(echo_msg, nMsgLen), ignored_error);
+			cout << "[server->client] : " << echo_msg << endl;
+		}
+	}
+	getchar();
+	return 0;
+}
+
+#endif
